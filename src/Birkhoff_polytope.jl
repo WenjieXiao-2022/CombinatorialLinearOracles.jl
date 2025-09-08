@@ -320,6 +320,20 @@ end
 function Boscia.set_bound!(blmo::BirkhoffBLMO, c_idx, value, sense::Symbol)
     if sense == :greaterthan
         blmo.lower_bounds[c_idx] = value
+		if value == 1.0
+            n0 = blmo.dim
+            fixed_int_var = blmo.int_vars[c_idx]
+            # Convert linear index to (row, col) based on storage format
+            if blmo.append_by_column
+                j = ceil(Int, fixed_int_var / n0)  # column index
+                i = Int(fixed_int_var - n0 * (j - 1))  # row index
+            else
+                i = ceil(Int, fixed_int_var / n0)  # row index  
+                j = Int(fixed_int_var - n0 * (i - 1))  # column index
+            end
+            push!(blmo.fixed_to_one_rows, i)
+            push!(blmo.fixed_to_one_cols, j)
+        end
     elseif sense == :lessthan
         blmo.upper_bounds[c_idx] = value
     else
@@ -336,6 +350,51 @@ function Boscia.delete_bounds!(blmo::BirkhoffBLMO, cons_delete)
             blmo.upper_bounds[d_idx] = Inf
         end
     end
+
+	# sanity check
+    check_feasibility(blmo, i::Int, j::Int) =
+        blmo.lower_bounds[blmo.append_by_column ? (j-1)*blmo.dim + i : (i-1)*blmo.dim + j] != 0.0
+
+    fixed_to_one_rows = blmo.fixed_to_one_rows
+    fixed_to_one_cols = blmo.fixed_to_one_cols
+
+    feasible_flags  = check_feasibility.(Ref(blmo), fixed_to_one_rows, fixed_to_one_cols)
+    invalid_indices = findall(.!feasible_flags)
+
+    deleteat!(fixed_to_one_rows, invalid_indices)
+    deleteat!(fixed_to_one_cols, invalid_indices)
+
+    # remove the duplicate indices
+    pairs = collect(zip(blmo.fixed_to_one_rows, blmo.fixed_to_one_cols))
+    unique!(pairs)
+    resize!(blmo.fixed_to_one_rows, length(pairs))
+    resize!(blmo.fixed_to_one_cols, length(pairs))
+
+    blmo.fixed_to_one_rows .= first.(pairs)
+    blmo.fixed_to_one_cols .= last.(pairs)
+
+    nfixed = length(blmo.fixed_to_one_rows)
+    nreduced = blmo.dim - nfixed
+
+    # stores the indices of the original matrix that are still in the reduced matrix
+    index_map_rows = fill(1, nreduced)
+    index_map_cols = fill(1, nreduced)
+    idx_in_map_row = 1
+    idx_in_map_col = 1
+    for orig_idx in 1:blmo.dim
+        if orig_idx ∉ blmo.fixed_to_one_rows
+            index_map_rows[idx_in_map_row] = orig_idx
+            idx_in_map_row += 1
+        end
+        if orig_idx ∉ blmo.fixed_to_one_cols
+            index_map_cols[idx_in_map_col] = orig_idx
+            idx_in_map_col += 1
+        end
+    end
+
+    empty!(blmo.index_map_rows)
+    empty!(blmo.index_map_cols)
+    append!(blmo.index_map_rows, index_map_rows)
 end
 
 # Add bound constraint.
