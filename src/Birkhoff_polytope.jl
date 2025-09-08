@@ -16,7 +16,7 @@ struct BirkhoffBLMO <: Boscia.BoundedLinearMinimizationOracle
     rtol::Float64
 end
 
-BirkhoffBLMO(dim, lower_bounds, upper_bounds, int_vars; append_by_column = true) =
+BirkhoffBLMO(dim, lower_bounds, upper_bounds, int_vars; append_by_column = true, atol=1e-6, rtol=1e-3) =
     BirkhoffBLMO(
         append_by_column,
         dim,
@@ -27,8 +27,8 @@ BirkhoffBLMO(dim, lower_bounds, upper_bounds, int_vars; append_by_column = true)
         Int[],
         collect(1:dim),
         collect(1:dim),
-        1e-6,
-        1e-3,
+        atol,
+        rtol,
     )
 
 ## Necessary
