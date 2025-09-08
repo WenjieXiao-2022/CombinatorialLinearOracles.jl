@@ -7,8 +7,6 @@ node-specific bounds on the integer variables.
 struct BirkhoffBLMO <: Boscia.BoundedLinearMinimizationOracle
     append_by_column::Bool
     dim::Int
-    lower_bounds::Vector{Float64}
-    upper_bounds::Vector{Float64}
     int_vars::Vector{Int}
     fixed_to_one_rows::Vector{Int}
     fixed_to_one_cols::Vector{Int}
@@ -22,8 +20,8 @@ BirkhoffBLMO(dim, lower_bounds, upper_bounds, int_vars; append_by_column = true)
     BirkhoffBLMO(
         append_by_column,
         dim,
-        lower_bounds,
-        upper_bounds,
+        fill(0.0, length(int_vars)),
+        fill(1.0, length(int_vars)),
         int_vars,
         Int[],
         Int[],
