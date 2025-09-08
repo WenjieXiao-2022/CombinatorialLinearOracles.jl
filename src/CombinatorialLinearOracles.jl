@@ -10,6 +10,6 @@ using Boscia
 include("matchings.jl")
 include("spanning_tree.jl")
 include("shortest_path.jl")
-include("Birkhoff_polytope.jl")
+include("birkhoff_polytope.jl")
 
 end
