@@ -215,12 +215,31 @@ Fixings are maintained by the oracle (or deduced from `x` itself).
 """
 function Boscia.dicg_maximum_step(blmo::BirkhoffBLMO, direction, x; kwargs...)
     n = blmo.dim
+	T = promote_type(eltype(x), eltype(direction))
+    if size(direction, 2) == 1
+        direction =
+            blmo.append_by_column ? reshape(direction, (n, n)) :
+            transpose(reshape(direction, (n, n)))
+        x = blmo.append_by_column ? reshape(x, (n, n)) : transpose(reshape(x, (n, n)))
+    end
 
-    direction =
-        blmo.append_by_column ? reshape(direction, (n, n)) :
-        transpose(reshape(direction, (n, n)))
-    x = blmo.append_by_column ? reshape(x, (n, n)) : transpose(reshape(x, (n, n)))
-    return FrankWolfe.dicg_maximum_step(FrankWolfe.BirkhoffPolytopeLMO(), direction, x)
+    gamma_max = one(T)
+    for idx in eachindex(x)
+        if direction[idx] != 0.0
+            # iterate already on the boundary
+            if (direction[idx] < 0 && x[idx] ≈ 1) || (direction[idx] > 0 && x[idx] ≈ 0)
+                return zero(gamma_max)
+            end
+            # clipping with the zero boundary
+            if direction[idx] > 0
+                gamma_max = min(gamma_max, x[idx] / direction[idx])
+            else
+                @assert direction[idx] < 0
+                gamma_max = min(gamma_max, -(1 - x[idx]) / direction[idx])
+            end
+        end
+    end
+    return gamma_max
 end
 
 function Boscia.is_decomposition_invariant_oracle(blmo::BirkhoffBLMO)
