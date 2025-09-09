@@ -358,15 +358,15 @@ Boscia.is_decomposition_invariant_oracle(blmo::BosciaBirkhoffBLMO) =
     _is_decomposition_invariant_oracle_impl(blmo.birkhoffBLMO)
 
 
-# FrankWolfe API: method extensions for BirkhoffBLMO
+# FrankWolfe API: method extensions for BirkhoffLMO
 FrankWolfe.compute_extreme_point(lmo::FWBirkhoffLMO, d; kwargs...) =
-    _compute_extreme_point_impl(lmo.birkhoffBLMO, d; kwargs...)
+    _compute_extreme_point_impl(lmo.birkhoffLMO, d; kwargs...)
 
 FrankWolfe.compute_inface_extreme_point(lmo::FWBirkhoffLMO, direction, x; kwargs...) =
-    _compute_inface_extreme_point_impl(lmo.birkhoffBLMO, direction, x; kwargs...)
+    _compute_inface_extreme_point_impl(lmo.birkhoffLMO, direction, x; kwargs...)
 
 FrankWolfe.dicg_maximum_step(lmo::FWBirkhoffLMO, direction, x; kwargs...) =
-    _dicg_maximum_step_impl(lmo.birkhoffBLMO, direction, x; kwargs...)
+    _dicg_maximum_step_impl(lmo.birkhoffLMO, direction, x; kwargs...)
 
 FrankWolfe.is_decomposition_invariant_oracle(lmo::FWBirkhoffLMO) =
     _is_decomposition_invariant_oracle_impl(lmo.birkhoffLMO)
@@ -637,3 +637,4 @@ function Boscia.check_feasibility(lmo::BosciaBirkhoffBLMO)
 
     return Boscia.OPTIMAL
 end
+
