@@ -36,7 +36,6 @@ BirkhoffBLMO(dim, lower_bounds, upper_bounds, int_vars; append_by_column = true,
 """
 Computes the extreme point given an direction d, the current lower and upper bounds on the integer variables, and the set of integer variables.
 """
-
 function Boscia.compute_extreme_point(blmo::BirkhoffBLMO, d; kwargs...)
     n = blmo.dim
 
