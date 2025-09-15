@@ -226,8 +226,8 @@ function Boscia.compute_inface_extreme_point(lmo::BirkhoffLMO, direction, x; kwa
                 else
                     d2[j, i] = missing
                 end
-                # the problem can only be integer types,
-                # either full-integer or mixed-integer.
+            # the problem can only be integer types,
+            # either full-integer or mixed-integer.
             elseif length(int_vars) == n^2 || idx_map_ub[orig_linear_idx] != 0
                 idx = length(int_vars) < n^2 ? idx_map_ub[orig_linear_idx] : orig_linear_idx
                 # interdict arc when fixed to zero
