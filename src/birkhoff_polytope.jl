@@ -20,7 +20,7 @@ mutable struct BirkhoffLMO <: Boscia.BoundedLinearMinimizationOracle
     boscia_use::Bool
 end
 
-# return an integer-type BirkhoffLMO for Boscia
+# return an integer-type BirkhoffLMO
 BirkhoffLMO(dim, int_vars; append_by_column=true, atol=1e-6, rtol=1e-3) = BirkhoffLMO(
     append_by_column,
     dim,
@@ -31,13 +31,13 @@ BirkhoffLMO(dim, int_vars; append_by_column=true, atol=1e-6, rtol=1e-3) = Birkho
     Int[],
     collect(1:dim),
     collect(1:dim),
-    false,
+    true,
     atol,
     rtol,
     true,
 )
 
-# return a continuous BirkhoffLMO for FrankWolfe
+# return a continuous BirkhoffLMO
 BirkhoffLMO(dim; append_by_column=true, atol=1e-6, rtol=1e-3) = BirkhoffLMO(
     append_by_column,
     dim,
@@ -48,7 +48,7 @@ BirkhoffLMO(dim; append_by_column=true, atol=1e-6, rtol=1e-3) = BirkhoffLMO(
     Int[],
     collect(1:dim),
     collect(1:dim),
-    false,
+    true,
     atol,
     rtol,
     false,
@@ -59,17 +59,9 @@ BirkhoffLMO(dim; append_by_column=true, atol=1e-6, rtol=1e-3) = BirkhoffLMO(
 """
 Computes the extreme point given an direction d, the current lower and upper bounds on the integer variables, and the set of integer variables.
 """
+
 function Boscia.compute_extreme_point(lmo::BirkhoffLMO, d; kwargs...)
     n = lmo.dim
-
-    # Precompute index mapping to avoid repeated `findfirst` calls,
-    # which would be very costly inside the loop.
-    if length(lmo.int_vars) != n^2
-        idx_map_ub = zeros(Int, n^2)
-        @inbounds for (c_idx, var) in enumerate(lmo.int_vars)
-            idx_map_ub[var] = c_idx
-        end
-    end
 
     if size(d, 2) == 1
         d = lmo.append_by_column ? reshape(d, (n, n)) : transpose(reshape(d, (n, n)))
@@ -81,6 +73,16 @@ function Boscia.compute_extreme_point(lmo::BirkhoffLMO, d; kwargs...)
     index_map_cols = lmo.index_map_cols
     int_vars = lmo.int_vars
     ub = lmo.upper_bounds
+
+    is_full_integer = length(int_vars) == n^2 ? true : false
+    # Precompute index mapping to avoid repeated `findfirst` calls,
+    # which would be very costly inside the loop.
+    if !is_full_integer
+        idx_map_ub = zeros(Int, n^2)
+        @inbounds for (c_idx, var) in enumerate(lmo.int_vars)
+            idx_map_ub[var] = c_idx
+        end
+    end
 
     nreduced = length(index_map_rows)
     type = typeof(d[1, 1])
@@ -96,9 +98,9 @@ function Boscia.compute_extreme_point(lmo::BirkhoffLMO, d; kwargs...)
                 orig_linear_idx = (row_orig - 1) * n + col_orig
             end
             # the problem can only be integer types,
-            # either all-integer or mixed-integer.
-            if length(int_vars) == n^2 || idx_map_ub[orig_linear_idx] != 0
-                idx = length(int_vars) < n^2 ? idx_map_ub[orig_linear_idx] : orig_linear_idx
+            # either full-integer or mixed-integer.
+            if is_full_integer || idx_map_ub[orig_linear_idx] != 0
+                idx = is_full_integer ? orig_linear_idx : idx_map_ub[orig_linear_idx]
                 # interdict arc when fixed to zero
                 if ub[idx] <= eps()
                     if lmo.append_by_column
@@ -186,7 +188,7 @@ function Boscia.compute_inface_extreme_point(lmo::BirkhoffLMO, direction, x; kwa
 
     delete_index_map_rows = Int[]
     delete_index_map_cols = Int[]
-    for j in 1:nreduced
+    delete_reducedUB = for j in 1:nreduced
         for i in 1:nreduced
             row_orig = index_map_rows[i]
             col_orig = index_map_cols[j]
@@ -211,9 +213,9 @@ function Boscia.compute_inface_extreme_point(lmo::BirkhoffLMO, direction, x; kwa
     type = typeof(direction[1, 1])
     d2 = ones(Union{type,Missing}, nreduced, nreduced)
     for j in 1:nreduced
+        col_orig = index_map_cols[j]
         for i in 1:nreduced
             row_orig = index_map_rows[i]
-            col_orig = index_map_cols[j]
             if lmo.append_by_column
                 orig_linear_idx = (col_orig-1)*n+row_orig
             else
@@ -225,6 +227,8 @@ function Boscia.compute_inface_extreme_point(lmo::BirkhoffLMO, direction, x; kwa
                 else
                     d2[j, i] = missing
                 end
+                # the problem can only be integer types,
+                # either full-integer or mixed-integer.
             elseif length(int_vars) == n^2 || idx_map_ub[orig_linear_idx] != 0
                 idx = length(int_vars) < n^2 ? idx_map_ub[orig_linear_idx] : orig_linear_idx
                 # interdict arc when fixed to zero
@@ -276,7 +280,6 @@ function Boscia.compute_inface_extreme_point(lmo::BirkhoffLMO, direction, x; kwa
             SparseArrays.sparsevec(linear_indices, V, n^2)
         end
     end
-
     return m
 end
 
@@ -323,6 +326,16 @@ end
 The sum of each row and column has to be equal to 1.
 """
 function Boscia.is_linear_feasible(blmo::BirkhoffLMO, v::AbstractVector)
+    for (i, int_var) in enumerate(blmo.int_vars)
+        if !(
+            blmo.lower_bounds[i] ≤ v[int_var] + 1e-6 || !(v[int_var] - 1e-6 ≤ blmo.upper_bounds[i])
+        )
+            @debug(
+                "Variable: $(int_var) Vertex entry: $(v[int_var]) Lower bound: $(blmo.lower_bounds[i]) Upper bound: $(blmo.upper_bounds[i]))"
+            )
+            return false
+        end
+    end
     n = blmo.dim
     for i in 1:n
         # append by column ? column sum : row sum 
@@ -392,10 +405,10 @@ end
 # Change the value of the bound c_idx.
 function Boscia.set_bound!(blmo::BirkhoffLMO, c_idx, value, sense::Symbol)
     # Reset the lmo if necessary
-    if !blmo.updated_lmo
+    if blmo.updated_lmo
         empty!(blmo.fixed_to_one_rows)
         empty!(blmo.fixed_to_one_cols)
-        blmo.updated_lmo = true
+        blmo.updated_lmo = false
     end
     if sense == :greaterthan
         blmo.lower_bounds[c_idx] = value
@@ -453,7 +466,7 @@ function Boscia.delete_bounds!(blmo::BirkhoffLMO, cons_delete)
     empty!(blmo.index_map_cols)
     append!(blmo.index_map_rows, index_map_rows)
     append!(blmo.index_map_cols, index_map_cols)
-    blmo.updated_lmo = false
+    blmo.updated_lmo = true
     return true
 end
 
@@ -498,6 +511,26 @@ end
 # Has variable an integer constraint?
 function Boscia.has_integer_constraint(blmo::BirkhoffLMO, idx)
     return idx in blmo.int_vars
+end
+
+## Safety Functions
+
+# Check if the bounds were set correctly in build_LMO.
+# Safety check only.
+function Boscia.build_LMO_correct(blmo::BirkhoffLMO, node_bounds)
+    for key in keys(node_bounds.lower_bounds)
+        idx = findfirst(x -> x == key, blmo.int_vars)
+        if idx === nothing || blmo.lower_bounds[idx] != node_bounds[key, :greaterthan]
+            return false
+        end
+    end
+    for key in keys(node_bounds.upper_bounds)
+        idx = findfirst(x -> x == key, blmo.int_vars)
+        if idx === nothing || blmo.upper_bounds[idx] != node_bounds[key, :lessthan]
+            return false
+        end
+    end
+    return true
 end
 
 ## Optional
@@ -563,3 +596,4 @@ function Boscia.check_feasibility(blmo::BirkhoffLMO)
 
     return Boscia.OPTIMAL
 end
+
